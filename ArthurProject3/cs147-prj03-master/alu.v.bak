@@ -1,0 +1,80 @@
+// Name: alu.v
+// Module: ALU
+// Input: OP1[32] - operand 1
+//        OP2[32] - operand 2
+//        OPRN[6] - operation code
+// Output: OUT[32] - output result for the operation
+//
+// Notes: 32 bit combinatorial ALU
+// 
+// Supports the following functions
+//	- Integer add (0x1), sub(0x2), mul(0x3)
+//	- Integer shift_rigth (0x4), shift_left (0x5)
+//	- Bitwise and (0x6), or (0x7), nor (0x8)
+//  - set less than (0x9)
+//
+// Revision History:
+//
+// Version	Date		Who		email			note
+//------------------------------------------------------------------------------------------
+//  1.0     Sep 10, 2014	Kaushik Patra	kpatra@sjsu.edu		Initial creation
+//------------------------------------------------------------------------------------------
+//
+`include "prj_definition.v"
+module ALU(OUT, ZERO, OP1, OP2, OPRN);
+// input list
+input [`DATA_INDEX_LIMIT:0] OP1; // operand 1
+input [`DATA_INDEX_LIMIT:0] OP2; // operand 2
+input [`ALU_OPRN_INDEX_LIMIT:0] OPRN; // operation code
+
+// output list
+output [`DATA_INDEX_LIMIT:0] OUT; // result of the operation.
+output ZERO;
+
+// TBD
+wire [31:0] LO;
+wire [31:0] HI;
+wire [31:0] shift_res;
+wire [31:0] add_sub_res;
+wire [31:0] and_res;
+wire [31:0] or_res;
+wire [31:0] nor_res;
+wire add_sub_co;
+wire SnA_or_res;
+wire SnA_not_res;
+wire SnA_and_res;
+wire [31:0] mux_out;
+wire [31:0] zero_calc;
+genvar i;
+
+// Multiplcation operation
+MULT32 mult_inst(HI, LO, OP1, OP2);
+
+// Shift operation
+SHIFT32 shift_inst(shift_res, OP1, OP2, OPRN[0]);
+
+// Add-sub operation
+not inv_inst(SnA_not_res, OPRN[0]);
+and and_inst(SnA_and_res, OPRN[0], OPRN[3]);
+or or_inst(SnA_or_res, SnA_not_res, SnA_and_res);
+RC_ADD_SUB_32 add_sub_inst(add_sub_res, add_sub_co, OP1, OP2, SnA_or_res);
+
+// Logical operations
+AND32_2x1 and32_inst(and_res, OP1, OP2);
+OR32_2x1 or32_inst(or_res, OP1, OP2);
+NOR32_2x1 nor32_inst(nor_res, OP1, OP2);
+
+MUX32_16x1 mux16x1_inst(mux_out, add_sub_res, add_sub_res, LO, shift_res, shift_res, and_res, or_res, nor_res, {32'b0, add_sub_res[31]});
+assign Y = mux_out;
+
+nor nor_inst1(zero_calc[1], mux_out[0], mux_out[1]);
+generate
+for(i = 2; i < 32; i = i + 1)
+begin
+	nor nor_inst(zero_calc[i], zero_calc[i-1], mux_out[i]);
+end
+endgenerate
+
+assign ZERO = zero_calc[31];
+
+endmodule
